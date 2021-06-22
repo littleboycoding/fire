@@ -3,3 +3,6 @@ build:
 
 clean:
 	rd /s /q dist
+
+clean_linux:
+	rm -rf dist

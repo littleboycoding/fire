@@ -53,27 +53,30 @@ func scanner(action Action, opt *ActionOption) {
 
 	for i := range ifaces {
 		addr, err := ifaces[i].Addrs()
+		
 
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		ip, ipnet, err := net.ParseCIDR(addr[1].String())
+		for x := 0; x < len(addr); x++ {
+			ip, ipnet, err := net.ParseCIDR(addr[x].String())
 
-		if err != nil {
-			log.Fatal(err)
-		}
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		if ip.IsLoopback() || ip.IsUnspecified() {
-			continue
-		}
+			if ip.IsLoopback() || ip.IsUnspecified() {
+				continue
+			}
 
-		if ip4 := ip.To4(); ip4 != nil {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				ipList = append(ipList, ip_utils.LookupHost(ipnet)...)
-			}()
+			if ip4 := ip.To4(); ip4 != nil {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					ipList = append(ipList, ip_utils.LookupHost(ipnet)...)
+				}()
+			}
 		}
 	}
 	wg.Wait()

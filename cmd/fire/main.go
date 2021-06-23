@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,11 +17,13 @@ import (
 )
 
 const DEFAULT_PORT = "2001"
+const DEFAULT_NAME = "Anonymous"
 
 type Action []string
 type ActionOption struct {
 	port    string
 	msgpack bool
+	name    string
 }
 
 func showHelp() {
@@ -31,6 +36,7 @@ func showHelp() {
 	println("\nAdditional flags")
 	println("--port	[port]				Port for scan and send")
 	println("--msgpack				Return result as msgpack (to be use with external program)")
+	println("--name					Name to be shown for other users")
 }
 
 /*
@@ -96,31 +102,84 @@ func scanner(action Action, opt *ActionOption) {
 	fmt.Println(list)
 }
 
+func createMultipartForm(files []*os.File, name io.Reader) (bytes.Buffer, *multipart.Writer, error) {
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+
+	for _, file := range files {
+		fw, err := w.CreateFormFile("file", file.Name())
+		io.Copy(fw, file)
+
+		if err != nil {
+			return b, nil, err
+		}
+	}
+
+	fw, err := w.CreateFormField("name")
+	io.Copy(fw, name)
+
+	if err != nil {
+		return b, nil, err
+	}
+
+	w.Close()
+
+	return b, w, nil
+}
+
+//Transfer file to destination, multiple file allowed
 func sender(action Action, opt *ActionOption) {
-	if len(action) < 2 {
+	if len(action) < 3 {
 		log.Fatal("Missing required arguments")
 	}
 
-	target := "http://" + action[1] + ":" + opt.port
-	fmt.Printf("Connecting to %s\n", target)
+	target := "http://" + net.JoinHostPort(action[1], opt.port) + "/drop"
 
-	if resp, err := http.Get(target); err == nil {
-		defer resp.Body.Close()
+	var files []*os.File
 
-		if resp.StatusCode == 200 {
-			body := resp.Body
-			b, _ := io.ReadAll(body)
-
-			fmt.Println(string(b))
+	//Take the rest files
+	for _, file := range action[2:] {
+		fmt.Printf("Reading file %s\n", file)
+		file, err := os.Open(file)
+		if err != nil {
+			log.Fatal(err)
 		}
-	} else {
+
+		files = append(files, file)
+	}
+
+	b, w, err := createMultipartForm(files, strings.NewReader(opt.name))
+	if err != nil {
 		log.Fatal(err)
 	}
+
+	fmt.Printf("Transfering to %s\n", action[1])
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", target, &b)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+
+	status, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(string(status))
 }
 
 func main() {
-	var actionIndex int
 	var port string = DEFAULT_PORT
+	var name string = DEFAULT_NAME
+	var actionIndex int
 	var msgpack bool
 
 Loop:
@@ -130,6 +189,8 @@ Loop:
 			port = os.Args[i+1]
 		case "--msgpack":
 			msgpack = true
+		case "--name":
+			name = os.Args[i+1]
 		case "send", "scan", "help":
 			actionIndex = i
 			break Loop
@@ -145,6 +206,7 @@ Loop:
 	opt := &ActionOption{
 		port:    port,
 		msgpack: msgpack,
+		name:    name,
 	}
 
 	switch action[0] {

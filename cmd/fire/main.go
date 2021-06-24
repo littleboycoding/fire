@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -14,96 +13,8 @@ import (
 	"time"
 
 	"github.com/littleboycoding/fire/pkg/ip_utils"
+	"github.com/littleboycoding/fire/pkg/stdwriter"
 )
-
-const DEFAULT_PORT = "2001"
-const DEFAULT_NAME = "Anonymous"
-
-type Action []string
-type ActionOption struct {
-	port    string
-	msgpack bool
-	name    string
-}
-
-func showHelp() {
-	println("Fire, the fast and easy to use local network file transfers !")
-	println("Command syntax: fire [flags] [action]")
-	println("\nAvailable actions")
-	println("scan					Scan for local device")
-	println("send	[destination] [file path]	Send file to destination")
-	println("help	[action]			Show helps")
-	println("\nAdditional flags")
-	println("--port	[port]				Port for scan and send")
-	println("--msgpack				Return result as msgpack (to be use with external program)")
-	println("--name					Name to be shown for other users")
-}
-
-/*
-scan all local-device within network
-*/
-func scanner(action Action, opt *ActionOption) {
-
-	var wg sync.WaitGroup
-
-	//First part, getting all possible host address within network
-	println("Scanning...")
-	ifaces, _ := net.Interfaces()
-	ipList := []net.IP{}
-
-	for i := range ifaces {
-		addr, err := ifaces[i].Addrs()
-		
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		for x := 0; x < len(addr); x++ {
-			ip, ipnet, err := net.ParseCIDR(addr[x].String())
-
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			if ip.IsLoopback() || ip.IsUnspecified() {
-				continue
-			}
-
-			if ip4 := ip.To4(); ip4 != nil {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					ipList = append(ipList, ip_utils.LookupHost(ipnet)...)
-				}()
-			}
-		}
-	}
-	wg.Wait()
-
-	//Second part, dialing to these address to see if port available
-	list := []string{}
-
-	for i := range ipList {
-		addr := net.JoinHostPort(ipList[i].String(), opt.port)
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			conn, err := net.DialTimeout("tcp", addr, time.Second*5)
-			if err == nil {
-				fmt.Printf("Found %s\n", addr)
-
-				list = append(list, addr)
-				conn.Close()
-			}
-		}()
-	}
-
-	wg.Wait()
-
-	fmt.Println(list)
-}
 
 func createMultipartForm(files []*os.File, name io.Reader) (bytes.Buffer, *multipart.Writer, error) {
 	var b bytes.Buffer
@@ -130,94 +41,150 @@ func createMultipartForm(files []*os.File, name io.Reader) (bytes.Buffer, *multi
 	return b, w, nil
 }
 
-//Transfer file to destination, multiple file allowed
-func sender(action Action, opt *ActionOption) {
-	if len(action) < 3 {
-		log.Fatal("Missing required arguments")
+func showHelp() {
+	fmt.Println("Fire, the fast and easy to use local network file transfers !")
+	fmt.Println("Command syntax: fire [flags] [action]")
+	fmt.Println("\nAvailable actions")
+	fmt.Println("scan					Scan for local device")
+	fmt.Println("send	[destination] [file path]	Send file to destination")
+	fmt.Println("help	[action]			Show helps")
+	fmt.Println("\nAdditional flags")
+	fmt.Println("--port	[port]				Port for scan and send")
+	fmt.Println("--msgpack				Return result as msgpack (to be use with external program)")
+	fmt.Println("--name					Name to be shown for other users")
+}
+
+/*
+scan all local-device within network
+*/
+func scanner(action []string) {
+	var wg sync.WaitGroup
+
+	//First part, getting all possible host address within network
+	stdwriter.Write("Scanning...", stdwriter.NOT_MSP, Args.MSGPACK, false)
+	ifaces, _ := net.Interfaces()
+	ipList := []net.IP{}
+
+	for i := range ifaces {
+		addr, err := ifaces[i].Addrs()
+
+		if err != nil {
+			stdwriter.Write(err, stdwriter.BOTH, Args.MSGPACK, true)
+		}
+
+		for x := 0; x < len(addr); x++ {
+			ip, ipnet, err := net.ParseCIDR(addr[x].String())
+
+			if err != nil {
+				stdwriter.Write(err, stdwriter.BOTH, Args.MSGPACK, true)
+			}
+
+			if ip.IsLoopback() || ip.IsUnspecified() {
+				continue
+			}
+
+			if ip4 := ip.To4(); ip4 != nil {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					ipList = append(ipList, ip_utils.LookupHost(ipnet)...)
+				}()
+			}
+		}
+	}
+	wg.Wait()
+
+	//Second part, dialing to these address to see if port available
+	// list := []string{}
+
+	for i := range ipList {
+		currentIp := ipList[i].String()
+		addr := net.JoinHostPort(currentIp, Args.PORT)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			conn, err := net.DialTimeout("tcp", addr, time.Second*5)
+			if err == nil {
+				stdwriter.Write(fmt.Sprintf("Found %s", currentIp), stdwriter.NOT_MSP, Args.MSGPACK, false)
+				stdwriter.Write(currentIp, stdwriter.ONLY_MSP, Args.MSGPACK, false)
+
+				// list = append(list, currentIp)
+				conn.Close()
+			}
+		}()
 	}
 
-	target := "http://" + net.JoinHostPort(action[1], opt.port) + "/drop"
+	wg.Wait()
+
+	// stdwriter.Write(list, stdwriter.BOTH, Args.MSGPACK, false)
+}
+
+//Transfer file to destination, multiple file allowed
+func sender(action []string) {
+	if len(action) < 3 {
+		stdwriter.Write("Missing required arguments", stdwriter.BOTH, Args.MSGPACK, true)
+	}
+
+	target := "http://" + net.JoinHostPort(action[1], Args.PORT) + "/drop"
 
 	var files []*os.File
 
 	//Take the rest files
 	for _, file := range action[2:] {
-		fmt.Printf("Reading file %s\n", file)
+		stdwriter.Write(fmt.Sprintf("Reading %s", file), stdwriter.NOT_MSP, Args.MSGPACK, false)
 		file, err := os.Open(file)
 		if err != nil {
-			log.Fatal(err)
+			stdwriter.Write(err, stdwriter.BOTH, Args.MSGPACK, true)
 		}
 
 		files = append(files, file)
 	}
 
-	b, w, err := createMultipartForm(files, strings.NewReader(opt.name))
+	b, w, err := createMultipartForm(files, strings.NewReader(Args.NAME))
 	if err != nil {
-		log.Fatal(err)
+		stdwriter.Write(err, stdwriter.BOTH, Args.MSGPACK, true)
 	}
 
-	fmt.Printf("Transfering to %s\n", action[1])
+	stdwriter.Write(fmt.Sprintf("Transfering to %s", action[1]), stdwriter.NOT_MSP, Args.MSGPACK, false)
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", target, &b)
 	if err != nil {
-		log.Fatal(err)
+		stdwriter.Write(err, stdwriter.BOTH, Args.MSGPACK, true)
 	}
 
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		stdwriter.Write(err, stdwriter.BOTH, Args.MSGPACK, true)
 	}
 
 	defer resp.Body.Close()
 
 	status, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		stdwriter.Write(err, stdwriter.BOTH, Args.MSGPACK, true)
 	}
 
-	fmt.Println(string(status))
+	stdwriter.Write(string(status), stdwriter.BOTH, Args.MSGPACK, false)
 }
 
 func main() {
-	var port string = DEFAULT_PORT
-	var name string = DEFAULT_NAME
-	var actionIndex int
-	var msgpack bool
+	getArgs()
 
-Loop:
-	for i := range os.Args {
-		switch os.Args[i] {
-		case "--port":
-			port = os.Args[i+1]
-		case "--msgpack":
-			msgpack = true
-		case "--name":
-			name = os.Args[i+1]
-		case "send", "scan", "help":
-			actionIndex = i
-			break Loop
-		}
-	}
-
-	if actionIndex == 0 {
+	if Args.ACTION_INDEX == 0 {
 		showHelp()
 		return
 	}
 
-	action := os.Args[actionIndex:]
-	opt := &ActionOption{
-		port:    port,
-		msgpack: msgpack,
-		name:    name,
-	}
+	action := os.Args[Args.ACTION_INDEX:]
 
 	switch action[0] {
 	case "help":
 		showHelp()
 	case "scan":
-		scanner(action, opt)
+		scanner(action)
 	case "send":
-		sender(action, opt)
+		sender(action)
 	}
 }

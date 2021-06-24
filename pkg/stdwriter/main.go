@@ -31,12 +31,6 @@ type ErrorResponse struct {
 stdWriter write value to stdout/stderr depending on value
 
 mode is constant int range from 0 to 2, that indicate to write out if in msgpack or not msgpack mode
-
-0 -> write both msgpack and not msgpack
-
-1 -> only when not msgpack
-
-2 -> only msgpack
 */
 func Write(value interface{}, mode int, exitWhenError bool) {
 	if mode == 1 && MSGPACK {
@@ -56,7 +50,6 @@ func Write(value interface{}, mode int, exitWhenError bool) {
 		} else {
 			os.Stderr.Write([]byte(fmt.Sprintln(t.Error)))
 		}
-
 		if exitWhenError {
 			os.Exit(1)
 		}
@@ -75,7 +68,6 @@ func Write(value interface{}, mode int, exitWhenError bool) {
 	}
 }
 
-//Set if msgpack or not
 func SetMsgpack(b bool) {
 	MSGPACK = b
 }

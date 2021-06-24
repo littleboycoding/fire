@@ -14,6 +14,16 @@ import (
 	stdw "github.com/littleboycoding/fire/pkg/stdwriter"
 )
 
+type Action struct {
+	Action string
+	Data   interface{}
+}
+
+type ErrorAction struct {
+	Title string
+	Error error
+}
+
 const DEFAULT_PORT = "2001"
 
 func verifyFile(files []*multipart.FileHeader, from string) (bool, error) {

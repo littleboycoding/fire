@@ -21,7 +21,12 @@ func createMultipartForm(files []*os.File, name io.Reader) (bytes.Buffer, *multi
 	w := multipart.NewWriter(&b)
 
 	for _, file := range files {
-		fw, err := w.CreateFormFile("file", file.Name())
+		stat, err := file.Stat()
+		if err != nil {
+			return b, nil, err
+		}
+
+		fw, err := w.CreateFormFile("file", stat.Name())
 		io.Copy(fw, file)
 
 		if err != nil {

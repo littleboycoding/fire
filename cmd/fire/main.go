@@ -55,6 +55,7 @@ func showHelp() {
 	fmt.Println("help	[action]			Show helps")
 	fmt.Println("\nAdditional flags")
 	fmt.Println("--port	[port]				Port for scan and send")
+	fmt.Println("--dev	[name]				Device name to scan on, Default is to scan all")
 	fmt.Println("--msgpack				Return result as msgpack (to be use with external program)")
 	fmt.Println("--name					Name to be shown for other users")
 }
@@ -62,7 +63,7 @@ func showHelp() {
 /*
 scan all local-device within network
 */
-func scanner(action []string) {
+func scanner(action []string, ifname string) {
 	var wg sync.WaitGroup
 
 	res := stdw.Response{
@@ -70,7 +71,14 @@ func scanner(action []string) {
 		Data:  "Scanning...",
 	}
 	stdw.Write(res, stdw.NOT_MSP, false)
-	ifaces, _ := net.Interfaces()
+	var ifaces []net.Interface
+	if ifname == "" {
+		ifs, _ := net.Interfaces()
+		ifaces = ifs
+	} else {
+		ifs, _ := net.InterfaceByName(ifname)
+		ifaces = []net.Interface{*ifs}
+	}
 	ipList := []net.IP{}
 
 	for i := range ifaces {
@@ -105,6 +113,7 @@ func scanner(action []string) {
 					defer wg.Done()
 					ipList = append(ipList, ip_utils.LookupHost(ipnet)...)
 				}()
+				break
 			}
 		}
 	}
@@ -133,6 +142,7 @@ func scanner(action []string) {
 				conn.Close()
 			}
 		}()
+		time.Sleep(time.Microsecond)
 	}
 
 	wg.Wait()
@@ -238,7 +248,7 @@ func main() {
 	case "help":
 		showHelp()
 	case "scan":
-		scanner(action)
+		scanner(action, Args.DEVICE)
 	case "send":
 		sender(action)
 	}

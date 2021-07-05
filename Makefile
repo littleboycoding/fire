@@ -1,9 +1,12 @@
 build:
-	go build -o ./dist/fire.exe ./cmd/fire
-	go build -o ./dist/relay.exe ./cmd/relay
+	GOOS=linux GOARCH=amd64 go build -o ./dist/fire_linux ./cmd/fire
+	GOOS=linux GOARCH=amd64 go build -o ./dist/relay_linux ./cmd/relay
+
+	GOOS=darwin GOARCH=amd64 go build -o ./dist/fire_darwin ./cmd/fire
+	GOOS=darwin GOARCH=amd64 go build -o ./dist/relay_darwin ./cmd/relay
+
+	GOOS=windows GOARCH=amd64 go build -o ./dist/fire_window.exe ./cmd/fire
+	GOOS=windows GOARCH=amd64 go build -o ./dist/relay_window.exe ./cmd/relay
 
 clean:
-	rd /s /q dist
-
-clean_linux:
-	rm -rf dist
+	rm -rf ./dist

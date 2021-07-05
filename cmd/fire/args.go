@@ -10,9 +10,10 @@ type ArgsType = struct {
 	NAME         string
 	ACTION_INDEX int
 	MSGPACK      bool
+	DEVICE       string
 }
 
-var Args = ArgsType{DEFAULT_PORT, DEFAULT_NAME, 0, false}
+var Args = ArgsType{DEFAULT_PORT, DEFAULT_NAME, 0, false, ""}
 
 //Return current program execution arguments. Also set as global variable
 func getArgs() ArgsType {
@@ -25,6 +26,8 @@ Loop:
 			Args.MSGPACK = true
 		case "--name":
 			Args.NAME = os.Args[i+1]
+		case "--dev":
+			Args.DEVICE = os.Args[i+1]
 		case "send", "scan", "help":
 			Args.ACTION_INDEX = i
 			break Loop

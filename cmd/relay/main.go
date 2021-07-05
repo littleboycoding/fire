@@ -14,8 +14,6 @@ import (
 	stdw "github.com/littleboycoding/fire/pkg/stdwriter"
 )
 
-const DEFAULT_PORT = "2001"
-
 func verifyFile(files []*multipart.FileHeader, from string) (bool, error) {
 	//Pretty display file list when not msgpack
 	if !Args.MSGPACK {
@@ -146,9 +144,14 @@ func main() {
 	// println("Discoverable on port " + DEFAULT_PORT)
 	res := stdw.Response{
 		Title: "DISCOVERABLE",
-		Data:  "Discoverable on port " + DEFAULT_PORT,
+		Data:  "Discoverable on port " + Args.PORT,
 	}
 	stdw.Write(res, stdw.NOT_MSP, false)
+
+	router.GET("/name", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		w.Header().Add("Access-Control-Allow-Origin", "*")
+		fmt.Fprint(w, Args.NAME)
+	})
 
 	router.POST("/drop", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		if busy {
@@ -160,9 +163,11 @@ func main() {
 		defer func() {
 			busy = false
 			r.Body.Close()
+			r.MultipartForm.RemoveAll()
 		}()
 
-		r.ParseMultipartForm(2048)
+		var mb int64 = 5 * 1000000
+		r.ParseMultipartForm(mb)
 		res := stdw.Response{
 			Title: "INCOMING_FILE",
 			Data:  fmt.Sprintf("File transfer incoming from %s", r.MultipartForm.Value["name"][0]),
@@ -202,7 +207,7 @@ func main() {
 
 	e := stdw.ErrorResponse{
 		Title: "ERROR_SERVER_SHUTDOWN",
-		Error: http.ListenAndServe(":"+DEFAULT_PORT, router),
+		Error: http.ListenAndServe(":"+Args.PORT, router),
 	}
 	stdw.Write(e, stdw.BOTH, true)
 }

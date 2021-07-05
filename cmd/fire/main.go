@@ -58,6 +58,7 @@ func showHelp() {
 	fmt.Println("--dev	[name]				Device name to scan on, Default is to scan all")
 	fmt.Println("--msgpack				Return result as msgpack (to be use with external program)")
 	fmt.Println("--name					Name to be shown for other users")
+	fmt.Println("--include				Include yourself in scan result, Useful for development")
 }
 
 /*
@@ -111,7 +112,7 @@ func scanner(action []string, ifname string) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					ipList = append(ipList, ip_utils.LookupHost(ipnet)...)
+					ipList = append(ipList, ip_utils.LookupHost(ip4, ipnet, Args.INCLUDE)...)
 				}()
 				break
 			}

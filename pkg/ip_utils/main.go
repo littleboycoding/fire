@@ -7,7 +7,7 @@ import (
 /*
 Generate list of IPv4 from network
 */
-func LookupHost(ipnet *net.IPNet) []net.IP {
+func LookupHost(myip net.IP, ipnet *net.IPNet, include bool) []net.IP {
 	ip := ipnet.IP
 	startIp := int(ip[0])<<24 + int(ip[1])<<16 + int(ip[2])<<8 + int(ip[3])
 
@@ -19,9 +19,10 @@ func LookupHost(ipnet *net.IPNet) []net.IP {
 		oc1 := i & 0xff
 
 		ip4 := net.IPv4(byte(oc4), byte(oc3), byte(oc2), byte(oc1))
-
 		if ipnet.Contains(ip4) {
-			ipList = append(ipList, ip4)
+			if (include) || (!include && (ip4.String() != myip.String())) {
+				ipList = append(ipList, ip4)
+			}
 		} else {
 			break
 		}
